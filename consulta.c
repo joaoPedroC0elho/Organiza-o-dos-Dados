@@ -22,38 +22,80 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    // Validação do nome do sensor
+    if (strlen(argv[1]) == 0 || strlen(argv[1]) > 15) {
+        printf("Erro: Nome do sensor inválido. Deve ter entre 1 e 15 caracteres.\n");
+        return 1;
+    }
+
+    // Validação do timestamp
+    char *endptr;
+    long alvo = strtol(argv[2], &endptr, 10);
+    if (*endptr != '\0' || alvo <= 0) {
+        printf("Erro: Timestamp inválido. Deve ser um número positivo.\n");
+        return 1;
+    }
+
     // Monta o nome do arquivo baseado no nome do sensor
     char nomeArquivo[32];
-    sprintf(nomeArquivo, "%s.txt", argv[1]);  // Ex: sensor1 -> sensor1.txt
-
-    // Converte o timestamp alvo (procurado) de string para long
-    long alvo = atol(argv[2]);
+    sprintf(nomeArquivo, "%s.txt", argv[1]);
 
     // Abre o arquivo do sensor
     FILE *arquivo = fopen(nomeArquivo, "r");
     if (!arquivo) {
-        perror("Erro ao abrir arquivo do sensor");
+        printf("Erro: Arquivo do sensor '%s' não encontrado\n", nomeArquivo);
         return 1;
     }
 
     // Conta quantas linhas (leituras) existem no arquivo
     int total = 0;
     char linha[128];
-    while (fgets(linha, sizeof(linha), arquivo)) total++;
+    while (fgets(linha, sizeof(linha), arquivo)) {
+        // Valida o formato da linha
+        long ts;
+        char sensor[16], valor[64];
+        if (sscanf(linha, "%ld %s %s", &ts, sensor, valor) != 3) {
+            printf("Aviso: Linha com formato inválido ignorada: %s", linha);
+            continue;
+        }
+        total++;
+    }
+
+    if (total == 0) {
+        printf("Erro: Nenhuma leitura válida encontrada no arquivo\n");
+        fclose(arquivo);
+        return 1;
+    }
+
     rewind(arquivo); // Volta ao início do arquivo para leitura dos dados
 
     // Aloca memória para armazenar todas as leituras do arquivo
     Leitura *dados = malloc(total * sizeof(Leitura));
+    if (dados == NULL) {
+        printf("Erro: Falha ao alocar memória para as leituras\n");
+        fclose(arquivo);
+        return 1;
+    }
 
     // Lê os dados do arquivo linha por linha
-    // Ignora o segundo campo (identificador ou separador) usando %*s
+    int leituras_validas = 0;
     for (int i = 0; i < total; i++) {
-        fscanf(arquivo, "%ld %*s %s", &dados[i].timestamp, dados[i].valor);
+        if (fgets(linha, sizeof(linha), arquivo)) {
+            if (sscanf(linha, "%ld %*s %s", &dados[leituras_validas].timestamp, dados[leituras_validas].valor) == 2) {
+                leituras_validas++;
+            }
+        }
     }
-    fclose(arquivo); // Fecha o arquivo após leitura
+    fclose(arquivo);
+
+    if (leituras_validas == 0) {
+        printf("Erro: Nenhuma leitura válida encontrada no arquivo\n");
+        free(dados);
+        return 1;
+    }
 
     // Algoritmo de busca binária para encontrar a leitura mais próxima do timestamp alvo
-    int esq = 0, dir = total - 1, melhor = 0;
+    int esq = 0, dir = leituras_validas - 1, melhor = 0;
     while (esq <= dir) {
         int meio = (esq + dir) / 2;
 

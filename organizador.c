@@ -27,7 +27,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Abre o arquivo de entrada com os dados brutos
+    // Verifica se o arquivo de entrada existe
     FILE *entrada = fopen(argv[1], "r");
     if (!entrada) {
         perror("Erro ao abrir arquivo");
@@ -43,9 +43,30 @@ int main(int argc, char *argv[]) {
     char linha[MAX_LINHA];
     // Lê cada linha do arquivo
     while (fgets(linha, sizeof(linha), entrada)) {
+        // Verifica se a linha está vazia
+        if (strlen(linha) <= 1) {
+            printf("Aviso: Linha vazia encontrada no arquivo\n");
+            continue;
+        }
+
         Leitura l;
         // Extrai os dados da linha: timestamp, nome do sensor e valor
-        sscanf(linha, "%ld %s %s", &l.timestamp, l.sensor, l.valor);
+        if (sscanf(linha, "%ld %s %s", &l.timestamp, l.sensor, l.valor) != 3) {
+            printf("Erro: Formato inválido na linha: %s", linha);
+            continue;
+        }
+
+        // Validação do timestamp
+        if (l.timestamp <= 0) {
+            printf("Erro: Timestamp inválido na linha: %s", linha);
+            continue;
+        }
+
+        // Validação do nome do sensor
+        if (strlen(l.sensor) == 0 || strlen(l.sensor) > 15) {
+            printf("Erro: Nome do sensor inválido na linha: %s", linha);
+            continue;
+        }
 
         // Verifica se o sensor já foi encontrado anteriormente
         int i;
@@ -57,21 +78,56 @@ int main(int argc, char *argv[]) {
         // Se for um novo sensor, registra e aloca espaço para suas leituras
         if (i == numSensores) {
             if (numSensores >= MAX_SENSORES) {
-                printf("Erro: muitos sensores diferentes\n");
+                printf("Erro: muitos sensores diferentes (máximo: %d)\n", MAX_SENSORES);
+                fclose(entrada);
+                // Libera memória alocada anteriormente
+                for (int j = 0; j < numSensores; j++) {
+                    free(leituras[j]);
+                }
                 return 1;
             }
-            strcpy(sensores[numSensores], l.sensor);                   // Guarda o nome do novo sensor
-            leituras[numSensores] = malloc(5000 * sizeof(Leitura));   // Aloca espaço para até 5000 leituras
+            strcpy(sensores[numSensores], l.sensor);
+            leituras[numSensores] = malloc(5000 * sizeof(Leitura));
+            if (leituras[numSensores] == NULL) {
+                printf("Erro: Falha ao alocar memória para o sensor %s\n", l.sensor);
+                fclose(entrada);
+                // Libera memória alocada anteriormente
+                for (int j = 0; j < numSensores; j++) {
+                    free(leituras[j]);
+                }
+                return 1;
+            }
             numSensores++;
+        }
+
+        // Verifica se atingiu o limite de leituras para o sensor
+        if (contadores[i] >= 5000) {
+            printf("Aviso: Limite de leituras atingido para o sensor %s\n", l.sensor);
+            continue;
         }
 
         // Adiciona a leitura ao sensor correspondente
         leituras[i][contadores[i]++] = l;
     }
-    fclose(entrada); // Fecha o arquivo de entrada
+
+    if (ferror(entrada)) {
+        perror("Erro durante a leitura do arquivo");
+        fclose(entrada);
+        // Libera memória alocada
+        for (int i = 0; i < numSensores; i++) {
+            free(leituras[i]);
+        }
+        return 1;
+    }
+    fclose(entrada);
 
     // Para cada sensor, ordena suas leituras por timestamp e grava em um novo arquivo
     for (int i = 0; i < numSensores; i++) {
+        if (contadores[i] == 0) {
+            printf("Aviso: Nenhuma leitura válida para o sensor %s\n", sensores[i]);
+            continue;
+        }
+
         // Ordena as leituras por timestamp usando qsort
         qsort(leituras[i], contadores[i], sizeof(Leitura), comparar_leitura);
 
@@ -81,14 +137,38 @@ int main(int argc, char *argv[]) {
 
         // Abre o arquivo para escrita
         FILE *out = fopen(nomeArquivo, "w");
+        if (!out) {
+            printf("Erro: Não foi possível criar o arquivo %s\n", nomeArquivo);
+            // Libera memória alocada
+            for (int j = 0; j < numSensores; j++) {
+                free(leituras[j]);
+            }
+            return 1;
+        }
 
         // Escreve as leituras ordenadas no novo arquivo
         for (int j = 0; j < contadores[i]; j++) {
-            fprintf(out, "%ld %s %s\n", leituras[i][j].timestamp, sensores[i], leituras[i][j].valor);
+            if (fprintf(out, "%ld %s %s\n", leituras[i][j].timestamp, sensores[i], leituras[i][j].valor) < 0) {
+                printf("Erro ao escrever no arquivo %s\n", nomeArquivo);
+                fclose(out);
+                // Libera memória alocada
+                for (int k = 0; k < numSensores; k++) {
+                    free(leituras[k]);
+                }
+                return 1;
+            }
         }
 
-        fclose(out);          // Fecha o arquivo de saída
-        free(leituras[i]);    // Libera a memória alocada para as leituras
+        if (fclose(out) != 0) {
+            printf("Erro ao fechar o arquivo %s\n", nomeArquivo);
+            // Libera memória alocada
+            for (int j = 0; j < numSensores; j++) {
+                free(leituras[j]);
+            }
+            return 1;
+        }
+
+        free(leituras[i]);
     }
 
     return 0;

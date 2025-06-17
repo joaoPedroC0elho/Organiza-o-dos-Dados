@@ -1,2 +1,41 @@
+# Arquivos executáveis
 *.exe
+*.out
+*.app
+
+# Arquivos de dados
 *.txt
+dados.txt
+*.dat
+
+# Arquivos de objeto
+*.o
+*.obj
+
+# Arquivos de depuração
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# Arquivos de IDE/Editor
+.vscode/
+.idea/
+*.swp
+*~
+
+# Arquivos de compilação
+*.a
+*.so
+*.dylib
+*.dll
+
+# Arquivos temporários
+*.tmp
+*.temp
+*.log
+
+# Arquivos específicos do projeto
+gerador
+organizador
+consulta
