@@ -80,10 +80,8 @@ timestamp sensor valor
 
 Exemplo:
 ```
-1617235200 temp 25
-1617235201 umidade 65.5
-1617235202 presenca true
-1617235203 status msg123
+1718501234 TEMP 23.5
+1718501260 TEMP 24.1
 ```
 
 ## Tratamento de Erros
